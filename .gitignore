@@ -1,0 +1,8 @@
+# IDE
+.DS_Store
+nbproject/*
+catalog.xml
+.idea
+*.project
+
+
