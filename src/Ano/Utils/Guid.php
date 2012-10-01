@@ -14,6 +14,9 @@ namespace Ano\Utils;
  */
 class Guid
 {
+    protected $index = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+
     /**
      * Source and copyright : http://api.cakephp.org/class/string#method-Stringuuid
      *
@@ -89,5 +92,115 @@ class Guid
         );
 
         return $uuid;
+    }
+
+    public function urlEncode($guid)
+    {
+        $shortGuid = str_replace(array('-', '{', '}'), array('', '', ''), $guid);
+        $shortGuid = substr($shortGuid, 6, 2) . substr($shortGuid, 4, 2) . substr($shortGuid, 2, 2) . substr($shortGuid, 0, 2)
+            . substr($shortGuid, 10, 2) . substr($shortGuid, 8, 2)
+            . substr($shortGuid, 14, 2) . substr($shortGuid, 12, 2)
+            . substr($shortGuid, 16, 4)
+            . substr($shortGuid, 20, 12);
+        
+        $shortGuid = hex2bin($shortGuid);        
+        $shortGuid = base64_encode($shortGuid);
+        $shortGuid = strtr($shortGuid, '/+', '_-');
+
+        return rtrim($shortGuid, '=');
+    }
+
+    public function urlDecode($shortGuid)
+    {
+        $subject = strtr($shortGuid, '_-', '/+') . '==';
+        $subject = base64_decode($subject);
+        if ($subject == false || strlen($subject) < 16) {
+            // Do something smart like throwing an exception
+        }
+        
+        $subject = bin2hex($subject);
+        $guid = substr($subject, 6, 2) . substr($subject, 4, 2) . substr($subject, 2, 2) . substr($subject, 0, 2)
+            . '-' . substr($subject, 10, 2) . substr($subject, 8, 2)
+            . '-' . substr($subject, 14, 2) . substr($subject, 12, 2)
+            . '-' . substr($subject, 16, 4)
+            . '-' . substr($subject, 20, 12);
+
+        return $guid;
+    }
+
+    public function intToAlpha($in, $pad = false, $passPhrase = null, $encode = true)
+    {
+        $index = $this->index;
+        if ($passPhrase !== null) {
+            $index = $this->encodePassPhrase($index, $passPhrase);
+        }
+        $base = strlen($index);
+
+        if (is_numeric($pad)) {
+            $pad--;
+            if ($pad > 0) {
+                $in += pow($base, $pad);
+            }
+        }
+
+        $out = "";
+        for ($t = floor(log($in, $base)); $t >= 0; $t--) {
+            $bcp = bcpow($base, $t);
+            $a   = floor($in / $bcp) % $base;
+            $out = $out . substr($index, $a, 1);
+            $in  = $in - ($a * $bcp);
+        }
+        $out = strrev($out); // reverse
+
+        return $encode ? base64_encode($out) : $out;
+    }
+
+    public function alphaToInt($in, $pad = false, $passPhrase = null, $decode = true)
+    {
+        $in = $decode ? base64_decode($in) : $in;
+        $index = $this->index;
+        if ($passPhrase !== null) {
+            $index = $this->encodePassPhrase($index, $passPhrase);
+        }
+        $base = strlen($index);
+
+        $in  = strrev($in);
+        $out = 0;
+        $len = strlen($in) - 1;
+        for ($t = 0; $t <= $len; $t++) {
+            $bcpow = bcpow($base, $len - $t);
+            $out   = $out + strpos($index, substr($in, $t, 1)) * $bcpow;
+        }
+
+        if (is_numeric($pad)) {
+            $pad--;
+            if ($pad > 0) {
+                $out -= pow($base, $pad);
+            }
+        }
+        $out = sprintf('%F', $out);
+        $out = substr($out, 0, strpos($out, '.'));
+
+        return $out;
+    }
+
+    private function encodePassPhrase($in, $passPhrase)
+    {
+        for ($n = 0; $n < strlen($in); $n++) {
+            $i[] = substr($in, $n, 1);
+        }
+
+        $passhash = hash('sha256', $passPhrase);
+        $passhash = (strlen($passhash) < strlen($in))
+            ? hash('sha512', $passPhrase)
+            : $passhash;
+
+        for ($n = 0; $n < strlen($in); $n++) {
+            $p[] = substr($passhash, $n, 1);
+        }
+
+        array_multisort($p, SORT_DESC, $i);
+
+        return implode($i);
     }
 }
